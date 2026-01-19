@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symulacja Ewolucji - LUCA</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        #container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        #sidebar {
+            width: 320px;
+            background: #2a2a2a;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 2px solid #444;
+        }
+        
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #gridCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            opacity: 0.3;
+            z-index: 1;
+        }
+        
+        canvas {
+            display: block;
+            background: #0a0a0a;
+            position: relative;
+            z-index: 0;
+        }
+        
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+        
+        h2 {
+            font-size: 18px;
+            margin: 20px 0 10px 0;
+            color: #81C784;
+        }
+        
+        .param-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 13px;
+            color: #bbb;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+        
+        input[type="number"] {
+            width: 60px;
+            padding: 4px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 3px;
+        }
+        
+        select {
+            width: 100%;
+            padding: 8px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 3px;
+            margin-bottom: 10px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: #4CAF50;
+            border: none;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        
+        #pauseBtn {
+            background: #FF9800;
+        }
+        
+        #pauseBtn:hover {
+            background: #F57C00;
+        }
+        
+        .value-display {
+            display: inline-block;
+            min-width: 50px;
+            text-align: right;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        #stats {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 13px;
+            min-width: 200px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .stat-line {
+            margin: 5px 0;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        #cellInfo {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.85);
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 12px;
+            min-width: 200px;
+            pointer-events: none;
+            z-index: 10;
+            border: 2px solid #4CAF50;
+        }
+        
+        .info-text {
+            font-size: 11px;
+            color: #888;
+            margin-top: 5px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <h1>🧬 LUCA Designer</h1>
+            <p style="font-size: 12px; color: #888; margin-bottom: 20px;">
+                Zaprojektuj pierwotną komórkę i obserwuj ewolucję
+            </p>
+            
+            <h2>Kształt komórki</h2>
+            <select id="shapeType">
+                <option value="circle">Okrąg</option>
+                <option value="ellipse">Elipsa</option>
+                <option value="triangle">Trójkąt</option>
+                <option value="square">Czworokąt</option>
+                <option value="pentagon">Pięciokąt</option>
+                <option value="hexagon">Sześciokąt</option>
+                <option value="random" selected>Losowy</option>
+            </select>
+            
+            <h2>Adhezja (lepkość)</h2>
+            <div class="param-group">
+                <label>
+                    Siła łączenia: <span class="value-display" id="adhesionValue">50</span>
+                </label>
+                <input type="range" id="adhesion" min="0" max="100" value="50">
+                <p class="info-text">Próg łączenia: 30. Wyższe wartości = łatwiejsze tworzenie kolonii</p>
+            </div>
+            
+            <h2>Metabolizm</h2>
+            <div class="param-group">
+                <label>
+                    Konsumpcja tlenu: <span class="value-display" id="oxygenValue">2.0</span>/s
+                </label>
+                <input type="range" id="oxygen" min="0.5" max="5" step="0.1" value="2">
+            </div>
+            
+            <div class="param-group">
+                <label>
+                    Konsumpcja glukozy: <span class="value-display" id="glucoseValue">1.5</span>/s
+                </label>
+                <input type="range" id="glucose" min="0.5" max="3" step="0.1" value="1.5">
+            </div>
+            
+            <div class="param-group">
+                <label>
+                    Produkcja CO₂: <span class="value-display" id="co2Value">3.0</span>/s
+                </label>
+                <input type="range" id="co2" min="1" max="6" step="0.1" value="3">
+            </div>
+            
+            <div class="param-group">
+                <label>
+                    Produkcja azotu: <span class="value-display" id="nitrogenValue">0.5</span>/s
+                </label>
+                <input type="range" id="nitrogen" min="0" max="2" step="0.1" value="0.5">
+            </div>
+            
+            <h2>Tolerancja temperatury</h2>
+            <div class="param-group">
+                <label>
+                    Min temperatura: <span class="value-display" id="tempMinValue">15</span>°C
+                </label>
+                <input type="range" id="tempMin" min="0" max="30" value="15">
+            </div>
+            
+            <div class="param-group">
+                <label>
+                    Max temperatura: <span class="value-display" id="tempMaxValue">35</span>°C
+                </label>
+                <input type="range" id="tempMax" min="20" max="50" value="35">
+            </div>
+            
+            <button id="startBtn">🚀 Rozpocznij Symulację</button>
+            <button id="pauseBtn" disabled>⏸ Pauza</button>
+            <button id="resetBtn">🔄 Reset</button>
+            <button id="addCellsBtn" disabled>➕ Dodaj 100 Komórek</button>
+            
+            <h2>Prędkość czasu</h2>
+            <div class="param-group">
+                <label>
+                    Tempo biologiczne: <span class="value-display" id="timeScaleValue">1.0x</span>
+                </label>
+                <input type="range" id="timeScale" min="0.1" max="10" step="0.1" value="1">
+                <p class="info-text">Przyśpiesza tylko biologię (podział, śmierć, metabolizm), nie fizykę</p>
+            </div>
+            
+            <h2>Wizualizacja</h2>
+            <div class="param-group">
+                <label>
+                    <input type="checkbox" id="showGrid" checked> Pokaż grid substancji
+                </label>
+                <select id="gridSubstance">
+                    <option value="oxygen">Tlen</option>
+                    <option value="glucose">Glukoza</option>
+                    <option value="co2">CO₂</option>
+                    <option value="temperature">Temperatura</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="canvas-container">
+            <canvas id="gridCanvas"></canvas>
+            <div id="stats">
+                <div class="stat-line">⏱️ Czas: <span id="timeDisplay">0:00</span></div>
+                <div class="stat-line">🦠 Komórki: <span id="cellCount">0</span></div>
+                <div class="stat-line">🔍 Zoom: <span id="zoomLevel">1.0x</span></div>
+                <div class="stat-line">🔗 Kolonie: <span id="colonyCount">0</span></div>
+                <div class="stat-line">📊 Pokolenie: <span id="generation">0</span></div>
+                <div class="stat-line">🧬 Mutacje: <span id="mutations">0</span></div>
+                <hr style="margin: 10px 0; border-color: #444;">
+                <div class="stat-line" style="font-size: 11px;">Śr. adhezja: <span id="avgAdhesion">--</span></div>
+                <div class="stat-line" style="font-size: 11px;">Śr. rozmiar kolonii: <span id="avgColonySize">--</span></div>
+                <hr style="margin: 10px 0; border-color: #444;">
+                <div style="font-weight: bold; font-size: 12px; margin-bottom: 5px;">📊 Statystyki</div>
+                <div class="stat-line" style="font-size: 11px;">👶 Narodziny: <span id="birthCount">0</span></div>
+                <div class="stat-line" style="font-size: 11px;">💀 Śmierci: <span id="totalDeaths">0</span></div>
+                <div class="stat-line" style="font-size: 11px;">⏳ Starość: <span id="deathAge">0</span></div>
+                <div class="stat-line" style="font-size: 11px;">🥶 Temperatura: <span id="deathTemp">0</span></div>
+                <div class="stat-line" style="font-size: 11px;">😵 Głód: <span id="deathStarve">0</span></div>
+                <div class="stat-line" style="font-size: 11px;">☠️ Zatrucie: <span id="deathPoison">0</span></div>
+            </div>
+            
+            <div id="controls">
+                <div>🖱️ Prawy przycisk = przesuń mapę</div>
+                <div>🔍 Scroll = zoom</div>
+                <div>👆 Lewy klik = info o komórce</div>
+            </div>
+            
+            <div id="cellInfo" style="display: none;">
+                <div style="font-weight: bold; margin-bottom: 5px;">📊 Informacje o komórce</div>
+                <div class="stat-line">🧬 Pokolenie: <span id="cellGen">-</span></div>
+                <div class="stat-line">⏱️ Wiek: <span id="cellAge">-</span>s</div>
+                <div class="stat-line">💚 Życie: <span id="cellLife">-</span>%</div>
+                <div class="stat-line">🔗 Adhezja: <span id="cellAdhesion">-</span></div>
+                <div class="stat-line">🌡️ Tolerancja: <span id="cellTemp">-</span>°C</div>
+                <div class="stat-line">🔬 Kształt: <span id="cellShape">-</span></div>
+                <div class="stat-line">👥 Połączenia: <span id="cellConnections">-</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Matter.js modules
+        const { Engine, Render, World, Bodies, Body, Events, Mouse, MouseConstraint, Composite, Runner, Constraint } = Matter;
+        
+        // Global state
+        let engine, render, world;
+        let cells = [];
+        let substanceGrid = [];
+        let config = {};
+        let isRunning = false;
+        let isPaused = false;
+        let startTime = 0;
+        let stats = {
+            cellCount: 0,
+            colonyCount: 0,
+            generation: 0,
+            mutations: 0,
+            births: 0,
+            deaths: {
+                age: 0,
+                temperature: 0,
+                starvation: 0,
+                poison: 0
+            }
+        };
+        let colonies = []; // Track connected cell groups
+        let constraints = []; // Track all connection constraints
+        let gridCanvas, gridCtx; // For substance visualization
+        let showGrid = true;
+        let gridSubstance = 'oxygen';
+        let statsHistory = []; // Track stats over time for charts
+        let maxHistoryLength = 100; // Keep last 100 data points
+        let timeScale = 1.0; // Biological time multiplier
+        
+        const WORLD_SIZE = 1000;
+        const GRID_RESOLUTION = 20; // Every 20px one grid cell
+        const CELL_SIZE = 0.2; // Reduced from 20 to 0.2 (100x smaller)
+        const CELL_LIFETIME = 120000; // 2 minutes in ms
+        const CELL_DIVISION_TIME = 60000; // 1 minute in ms
+        const MUTATION_RATE = 0.05; // 5%
+        const SHAPE_MUTATION_GENERATIONS = 10;
+        const ADHESION_THRESHOLD = 30;
+        const MOVEMENT_FORCE = 0.000000001; // Very tiny force for microscopic cells
+        
+        // Initialize
+        function init() {
+            // Setup grid canvas
+            gridCanvas = document.getElementById('gridCanvas');
+            gridCtx = gridCanvas.getContext('2d');
+            const container = document.getElementById('canvas-container');
+            gridCanvas.width = container.clientWidth;
+            gridCanvas.height = container.clientHeight;
+            
+            // Create engine
+            engine = Engine.create();
+            world = engine.world;
+            world.gravity.y = 0; // No gravity in petri dish
+            
+            // Create renderer
+            render = Render.create({
+                element: container,
+                engine: engine,
+                options: {
+                    width: container.clientWidth,
+                    height: container.clientHeight,
+                    wireframes: false,
+                    background: '#0a0a0a',
+                    showAngleIndicator: false,
+                    showVelocity: false
+                }
+            });
+            
+            // Set initial bounds to show entire world
+            render.bounds.min.x = 0;
+            render.bounds.min.y = 0;
+            render.bounds.max.x = WORLD_SIZE;
+            render.bounds.max.y = WORLD_SIZE;
+            
+            // Use lookAt to properly apply the view
+            Matter.Render.lookAt(render, {
+                min: { x: 0, y: 0 },
+                max: { x: WORLD_SIZE, y: WORLD_SIZE }
+            });
+            
+            // Initialize substance grid
+            initSubstanceGrid();
+            
+            // Setup UI handlers
+            setupUI();
+            
+            // Start engine
+            Render.run(render);
+            const runner = Runner.create();
+            Runner.run(runner, engine);
+            
+            // Setup mouse controls AFTER render canvas is created
+            setupMouseControls();
+            
+            // Game loop
+            setInterval(gameLoop, 100); // 10 times per second
+            
+            // Separate render loop for grid (runs more frequently)
+            setInterval(() => {
+                if (isRunning && !isPaused && showGrid) {
+                    drawSubstanceGrid();
+                } else if (!showGrid) {
+                    gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+                }
+            }, 200); // Update grid visualization 5 times per second
+        }
+        
+        function setupMouseControls() {
+            if (!render || !render.canvas) {
+                console.error('Render canvas not ready!');
+                return;
+            }
+            
+            console.log('Setting up mouse controls on canvas:', render.canvas);
+            
+            const mouse = Mouse.create(render.canvas);
+            let isPanning = false;
+            let panStart = { x: 0, y: 0 };
+            
+            render.canvas.addEventListener('mousedown', (e) => {
+                console.log('mousedown', e.button);
+                
+                // Right click = pan
+                if (e.button === 2) {
+                    e.preventDefault();
+                    isPanning = true;
+                    panStart = { x: e.clientX, y: e.clientY };
+                }
+                
+                // Left click = select cell
+                if (e.button === 0 && isRunning) {
+                    selectCellAtPosition(e.offsetX, e.offsetY);
+                }
+            });
+            
+            // Prevent context menu on right click
+            render.canvas.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+            });
+            
+            render.canvas.addEventListener('mousemove', (e) => {
+                if (isPanning) {
+                    const dx = e.clientX - panStart.x;
+                    const dy = e.clientY - panStart.y;
+                    
+                    // Move camera using lookAt
+                    const scale = (render.bounds.max.x - render.bounds.min.x) / render.canvas.width;
+                    
+                    // Calculate center offset
+                    const centerX = (render.bounds.min.x + render.bounds.max.x) / 2;
+                    const centerY = (render.bounds.min.y + render.bounds.max.y) / 2;
+                    
+                    const newCenterX = centerX - dx * scale;
+                    const newCenterY = centerY - dy * scale;
+                    
+                    // Use lookAt to move camera
+                    Matter.Render.lookAt(render, {
+                        min: { x: render.bounds.min.x - dx * scale, y: render.bounds.min.y - dy * scale },
+                        max: { x: render.bounds.max.x - dx * scale, y: render.bounds.max.y - dy * scale }
+                    });
+                    
+                    console.log('Pan: dx=', dx, 'new center:', newCenterX, newCenterY);
+                    
+                    panStart = { x: e.clientX, y: e.clientY };
+                }
+            });
+            
+            render.canvas.addEventListener('mouseup', () => {
+                isPanning = false;
+            });
+            
+            render.canvas.addEventListener('mouseleave', () => {
+                isPanning = false;
+            });
+            
+            // Zoom with mouse wheel
+            let viewScale = 1;
+            render.canvas.addEventListener('wheel', (e) => {
+                console.log('wheel event', e.deltaY);
+                e.preventDefault();
+                const scaleFactor = e.deltaY < 0 ? 0.9 : 1.1; // Zoom in/out
+                
+                // Get mouse position in world coordinates
+                const bounds = render.bounds;
+                const mouseX = bounds.min.x + (e.offsetX / render.canvas.width) * (bounds.max.x - bounds.min.x);
+                const mouseY = bounds.min.y + (e.offsetY / render.canvas.height) * (bounds.max.y - bounds.min.y);
+                
+                // Calculate new bounds
+                const width = (bounds.max.x - bounds.min.x) * scaleFactor;
+                const height = (bounds.max.y - bounds.min.y) * scaleFactor;
+                
+                // Zoom towards mouse position
+                const mouseRatioX = (mouseX - bounds.min.x) / (bounds.max.x - bounds.min.x);
+                const mouseRatioY = (mouseY - bounds.min.y) / (bounds.max.y - bounds.min.y);
+                
+                const newMinX = mouseX - width * mouseRatioX;
+                const newMaxX = mouseX + width * (1 - mouseRatioX);
+                const newMinY = mouseY - height * mouseRatioY;
+                const newMaxY = mouseY + height * (1 - mouseRatioY);
+                
+                // Use lookAt to apply zoom
+                Matter.Render.lookAt(render, {
+                    min: { x: newMinX, y: newMinY },
+                    max: { x: newMaxX, y: newMaxY }
+                });
+                
+                console.log('Zoom: scaleFactor', scaleFactor, 'new width:', width);
+            });
+        }
+        
+        function selectCellAtPosition(screenX, screenY) {
+            // Convert screen coordinates to world coordinates
+            const bounds = render.bounds;
+            const worldX = bounds.min.x + (screenX / render.canvas.width) * (bounds.max.x - bounds.min.x);
+            const worldY = bounds.min.y + (screenY / render.canvas.height) * (bounds.max.y - bounds.min.y);
+            
+            // Find closest cell within click range
+            let closestCell = null;
+            let minDist = CELL_SIZE * 5; // Click tolerance
+            
+            cells.forEach(cell => {
+                const dx = cell.body.position.x - worldX;
+                const dy = cell.body.position.y - worldY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < minDist) {
+                    minDist = dist;
+                    closestCell = cell;
+                }
+            });
+            
+            if (closestCell) {
+                displayCellInfo(closestCell);
+            } else {
+                document.getElementById('cellInfo').style.display = 'none';
+            }
+        }
+        
+        function displayCellInfo(cell) {
+            const now = Date.now();
+            const age = (now - cell.birthTime) / 1000; // in seconds
+            const lifePercent = ((CELL_LIFETIME - (now - cell.birthTime)) / CELL_LIFETIME * 100).toFixed(1);
+            
+            document.getElementById('cellGen').textContent = cell.generation;
+            document.getElementById('cellAge').textContent = age.toFixed(1);
+            document.getElementById('cellLife').textContent = lifePercent;
+            document.getElementById('cellAdhesion').textContent = cell.config.adhesion.toFixed(1);
+            document.getElementById('cellTemp').textContent = `${cell.config.tempMin.toFixed(1)} - ${cell.config.tempMax.toFixed(1)}`;
+            document.getElementById('cellShape').textContent = cell.config.shapeType;
+            document.getElementById('cellConnections').textContent = cell.connections.length;
+            
+            document.getElementById('cellInfo').style.display = 'block';
+        }
+        
+        function initSubstanceGrid() {
+            const gridSize = Math.ceil(WORLD_SIZE / GRID_RESOLUTION);
+            substanceGrid = [];
+            
+            for (let x = 0; x < gridSize; x++) {
+                substanceGrid[x] = [];
+                for (let y = 0; y < gridSize; y++) {
+                    // Temperature gradient from -10°C (top) to 50°C (bottom)
+                    const tempMin = -10;
+                    const tempMax = 50;
+                    const temperature = tempMin + (y / (gridSize - 1)) * (tempMax - tempMin);
+                    
+                    substanceGrid[x][y] = {
+                        oxygen: 50 + Math.random() * 20,
+                        glucose: 30 + Math.random() * 20,
+                        co2: 10 + Math.random() * 10,
+                        nitrogen: 5 + Math.random() * 10,
+                        temperature: temperature
+                    };
+                }
+            }
+        }
+        
+        function setupUI() {
+            // Range input displays
+            const ranges = ['adhesion', 'oxygen', 'glucose', 'co2', 'nitrogen', 'tempMin', 'tempMax', 'timeScale'];
+            ranges.forEach(id => {
+                const input = document.getElementById(id);
+                const display = document.getElementById(id + 'Value');
+                input.addEventListener('input', () => {
+                    if (id === 'timeScale') {
+                        timeScale = parseFloat(input.value);
+                        display.textContent = timeScale.toFixed(1) + 'x';
+                    } else {
+                        display.textContent = input.value;
+                    }
+                });
+            });
+            
+            // Start button
+            document.getElementById('startBtn').addEventListener('click', startSimulation);
+            
+            // Pause button
+            document.getElementById('pauseBtn').addEventListener('click', togglePause);
+            
+            // Reset button
+            document.getElementById('resetBtn').addEventListener('click', resetSimulation);
+            
+            // Add cells button
+            document.getElementById('addCellsBtn').addEventListener('click', () => {
+                if (!isRunning) return;
+                for (let i = 0; i < 100; i++) {
+                    createCell(null, true); // Create 100 random cells
+                }
+            });
+            
+            // Grid visualization
+            document.getElementById('showGrid').addEventListener('change', (e) => {
+                showGrid = e.target.checked;
+                if (!showGrid) {
+                    gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+                }
+            });
+            
+            document.getElementById('gridSubstance').addEventListener('change', (e) => {
+                gridSubstance = e.target.value;
+            });
+        }
+        
+        function readConfig() {
+            return {
+                shapeType: document.getElementById('shapeType').value,
+                adhesion: parseFloat(document.getElementById('adhesion').value),
+                metabolism: {
+                    oxygen: parseFloat(document.getElementById('oxygen').value),
+                    glucose: parseFloat(document.getElementById('glucose').value),
+                    co2: parseFloat(document.getElementById('co2').value),
+                    nitrogen: parseFloat(document.getElementById('nitrogen').value)
+                },
+                tempMin: parseFloat(document.getElementById('tempMin').value),
+                tempMax: parseFloat(document.getElementById('tempMax').value)
+            };
+        }
+        
+        function startSimulation() {
+            if (isRunning) return;
+            
+            config = readConfig();
+            isRunning = true;
+            isPaused = false;
+            startTime = Date.now();
+            
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('pauseBtn').disabled = false;
+            document.getElementById('addCellsBtn').disabled = false;
+            
+            // Create initial 100 cells
+            for (let i = 0; i < 100; i++) {
+                createCell(null, true); // true = initial random variance
+            }
+            
+            updateStats();
+        }
+        
+        function togglePause() {
+            isPaused = !isPaused;
+            document.getElementById('pauseBtn').textContent = isPaused ? '▶️ Wznów' : '⏸ Pauza';
+        }
+        
+        function resetSimulation() {
+            // Clear all cells
+            cells.forEach(cell => {
+                World.remove(world, cell.body);
+            });
+            cells = [];
+            
+            // Reset stats
+            stats = {
+                cellCount: 0,
+                colonyCount: 0,
+                generation: 0,
+                mutations: 0,
+                births: 0,
+                deaths: {
+                    age: 0,
+                    temperature: 0,
+                    starvation: 0,
+                    poison: 0
+                }
+            };
+            
+            isRunning = false;
+            isPaused = false;
+            
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('addCellsBtn').disabled = true;
+            
+            // Reinit grid
+            initSubstanceGrid();
+            updateStats();
+        }
+        
+        function createCell(parent = null, randomVariance = false) {
+            let cellConfig;
+            
+            if (parent) {
+                // Inherit from parent with mutations
+                cellConfig = { ...parent.config };
+                
+                // Mutate
+                if (Math.random() < MUTATION_RATE) {
+                    cellConfig.adhesion = clamp(cellConfig.adhesion * (1 + (Math.random() - 0.5) * 0.1), 0, 100);
+                    stats.mutations++;
+                }
+                if (Math.random() < MUTATION_RATE) {
+                    cellConfig.metabolism.oxygen *= (1 + (Math.random() - 0.5) * 0.1);
+                    stats.mutations++;
+                }
+                if (Math.random() < MUTATION_RATE) {
+                    cellConfig.metabolism.glucose *= (1 + (Math.random() - 0.5) * 0.1);
+                    stats.mutations++;
+                }
+                if (Math.random() < MUTATION_RATE) {
+                    cellConfig.tempMin += (Math.random() - 0.5) * 4;
+                    cellConfig.tempMax += (Math.random() - 0.5) * 4;
+                    stats.mutations++;
+                }
+                
+                // Shape mutation every 10 generations
+                if (parent.generation % SHAPE_MUTATION_GENERATIONS === 0 && Math.random() < 0.3) {
+                    cellConfig.shapeType = getRandomShape();
+                    stats.mutations++;
+                }
+                
+            } else {
+                // New cell from config
+                cellConfig = { ...config };
+                
+                if (randomVariance) {
+                    cellConfig.adhesion = clamp(cellConfig.adhesion + (Math.random() - 0.5) * 40, 0, 100);
+                    cellConfig.tempMin = clamp(cellConfig.tempMin + (Math.random() - 0.5) * 10, 0, 30);
+                    cellConfig.tempMax = clamp(cellConfig.tempMax + (Math.random() - 0.5) * 10, 20, 50);
+                    
+                    if (cellConfig.shapeType === 'random') {
+                        cellConfig.shapeType = getRandomShape();
+                    }
+                }
+            }
+            
+            // Random position ONLY for initial cells or cells without parent
+            let x, y;
+            if (parent) {
+                // Spawn next to parent
+                const angle = Math.random() * Math.PI * 2;
+                const distance = CELL_SIZE * 1.5; // Spawn just outside parent
+                x = parent.body.position.x + Math.cos(angle) * distance;
+                y = parent.body.position.y + Math.sin(angle) * distance;
+            } else {
+                // Random position for initial population
+                x = Math.random() * (WORLD_SIZE - 100) + 50;
+                y = Math.random() * (WORLD_SIZE - 100) + 50;
+            }
+            
+            // Create physical body
+            const body = createShapeBody(cellConfig.shapeType, x, y);
+            
+            // If has parent, give initial "push" away from parent
+            if (parent) {
+                const pushAngle = Math.atan2(y - parent.body.position.y, x - parent.body.position.x);
+                const pushForce = 0.0000002; // Much smaller for microscopic cells
+                Body.setVelocity(body, {
+                    x: Math.cos(pushAngle) * pushForce,
+                    y: Math.sin(pushAngle) * pushForce
+                });
+            }
+            
+            // Random color based on lineage
+            const color = parent ? parent.color : randomColor();
+            body.render.fillStyle = color;
+            
+            // Border thickness based on adhesion - thin but visible
+            const adhesionLevel = cellConfig.adhesion;
+            body.render.strokeStyle = adhesionLevel > 70 ? '#ffff00' : 
+                                      adhesionLevel > 40 ? '#00ff00' : 
+                                      '#ffffff';
+            body.render.lineWidth = CELL_SIZE * 0.075; // 7.5% of cell size
+            
+            World.add(world, body);
+            
+            const cell = {
+                body: body,
+                config: cellConfig,
+                color: color,
+                birthTime: Date.now(),
+                lastDivision: Date.now(),
+                generation: parent ? parent.generation + 1 : 0,
+                alive: true,
+                connections: [], // Other cells this is connected to
+                colony: null, // Which colony this belongs to
+                movementIntention: { x: 0, y: 0 } // Direction this cell wants to move
+            };
+            
+            cells.push(cell);
+            stats.generation = Math.max(stats.generation, cell.generation);
+            stats.births++;
+            
+            return cell;
+        }
+        
+        function createShapeBody(shapeType, x, y) {
+            const size = CELL_SIZE;
+            const baseOptions = { 
+                friction: 0.9,        // Increased for tiny cells
+                frictionAir: 0.2,     // Much higher air resistance for tiny cells
+                restitution: 0.01,    // Almost no bounce
+                density: 0.001,       
+                frictionStatic: 1.0,
+                slop: 0.01            // Add slop to reduce jitter
+            };
+            
+            switch(shapeType) {
+                case 'circle':
+                    return Bodies.circle(x, y, size/2, baseOptions);
+                case 'ellipse':
+                    return Bodies.circle(x, y, size/2, baseOptions);
+                case 'triangle':
+                    return Bodies.polygon(x, y, 3, size/2, baseOptions);
+                case 'square':
+                    return Bodies.polygon(x, y, 4, size/2, baseOptions);
+                case 'pentagon':
+                    return Bodies.polygon(x, y, 5, size/2, baseOptions);
+                case 'hexagon':
+                    return Bodies.polygon(x, y, 6, size/2, baseOptions);
+                default:
+                    return Bodies.circle(x, y, size/2, baseOptions);
+            }
+        }
+        
+        function getRandomShape() {
+            const shapes = ['circle', 'ellipse', 'triangle', 'square', 'pentagon', 'hexagon'];
+            return shapes[Math.floor(Math.random() * shapes.length)];
+        }
+        
+        function randomColor() {
+            const hue = Math.random() * 360;
+            return `hsl(${hue}, 70%, 60%)`;
+        }
+        
+        function clamp(value, min, max) {
+            return Math.min(Math.max(value, min), max);
+        }
+        
+        function gameLoop() {
+            if (!isRunning || isPaused) return;
+            
+            const now = Date.now();
+            
+            // Update colonies FIRST before using them
+            updateColonies();
+            
+            // Update each cell
+            for (let i = cells.length - 1; i >= 0; i--) {
+                const cell = cells[i];
+                if (!cell.alive) continue;
+                
+                const age = now - cell.birthTime;
+                const timeSinceDivision = now - cell.lastDivision;
+                
+                // Apply time scale to biological processes
+                const scaledAge = age * timeScale;
+                const scaledTimeSinceDivision = timeSinceDivision * timeScale;
+                
+                // Check death
+                if (scaledAge > CELL_LIFETIME) {
+                    killCell(cell, i, 'age');
+                    continue;
+                }
+                
+                // Check temperature tolerance
+                const gridPos = getGridPosition(cell.body.position);
+                if (gridPos) {
+                    const temp = substanceGrid[gridPos.x][gridPos.y].temperature;
+                    if (temp < cell.config.tempMin || temp > cell.config.tempMax) {
+                        if (Math.random() < 0.01) { // 1% chance per tick to die
+                            killCell(cell, i, 'temperature');
+                            continue;
+                        }
+                    }
+                }
+                
+                // Cell division
+                if (scaledTimeSinceDivision > CELL_DIVISION_TIME && scaledAge < CELL_LIFETIME) {
+                    divideCell(cell);
+                }
+                
+                // Movement - random small force (individual intention)
+                cell.movementIntention = {
+                    x: (Math.random() - 0.5) * MOVEMENT_FORCE,
+                    y: (Math.random() - 0.5) * MOVEMENT_FORCE
+                };
+                
+                // Reduce angular velocity for cells in colonies (prevent spinning)
+                if (cell.connections.length > 0) {
+                    Body.setAngularVelocity(cell.body, cell.body.angularVelocity * 0.8);
+                }
+                
+                // If part of colony, only move if synchronized
+                if (cell.colony !== null && colonies[cell.colony]) {
+                    const colony = colonies[cell.colony];
+                    
+                    // Calculate average movement intention of colony
+                    let avgX = 0, avgY = 0;
+                    colony.forEach(c => {
+                        avgX += c.movementIntention.x;
+                        avgY += c.movementIntention.y;
+                    });
+                    avgX /= colony.length;
+                    avgY /= colony.length;
+                    
+                    // Check synchronization - if intentions align, move together
+                    let syncX = 0, syncY = 0;
+                    colony.forEach(c => {
+                        const dotX = c.movementIntention.x * avgX;
+                        const dotY = c.movementIntention.y * avgY;
+                        if (dotX > 0) syncX++;
+                        if (dotY > 0) syncY++;
+                    });
+                    
+                    // If >70% synchronized, use average force, otherwise cancel movement
+                    const syncThreshold = colony.length * 0.7;
+                    if (syncX > syncThreshold || syncY > syncThreshold) {
+                        Body.applyForce(cell.body, cell.body.position, { x: avgX, y: avgY });
+                    }
+                } else {
+                    // Single cell - move freely
+                    Body.applyForce(cell.body, cell.body.position, cell.movementIntention);
+                }
+                
+                // Metabolism (consume/produce substances)
+                const metabolismResult = updateMetabolism(cell);
+                if (metabolismResult === 'starve') {
+                    killCell(cell, i, 'starvation');
+                    continue;
+                } else if (metabolismResult === 'poison') {
+                    killCell(cell, i, 'poison');
+                    continue;
+                }
+            }
+            
+            // Diffuse substances
+            diffuseSubstances();
+            
+            // Check for cell connections
+            checkCellConnections();
+            
+            // Update UI
+            updateStats();
+        }
+        
+        function drawSubstanceGrid() {
+            gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+            
+            // Calculate which part of the grid is visible
+            const bounds = render.bounds;
+            
+            // Convert world bounds to grid indices
+            const startGridX = Math.floor(bounds.min.x / GRID_RESOLUTION);
+            const endGridX = Math.ceil(bounds.max.x / GRID_RESOLUTION);
+            const startGridY = Math.floor(bounds.min.y / GRID_RESOLUTION);
+            const endGridY = Math.ceil(bounds.max.y / GRID_RESOLUTION);
+            
+            // Calculate scale (world units to screen pixels)
+            const scaleX = gridCanvas.width / (bounds.max.x - bounds.min.x);
+            const scaleY = gridCanvas.height / (bounds.max.y - bounds.min.y);
+            
+            for (let x = Math.max(0, startGridX); x < Math.min(substanceGrid.length, endGridX); x++) {
+                for (let y = Math.max(0, startGridY); y < Math.min(substanceGrid[0].length, endGridY); y++) {
+                    const value = substanceGrid[x][y][gridSubstance];
+                    let color;
+                    
+                    switch(gridSubstance) {
+                        case 'oxygen':
+                            // Blue gradient
+                            const oxygenIntensity = Math.min(value / 100, 1);
+                            color = `rgba(100, 150, 255, ${oxygenIntensity})`;
+                            break;
+                        case 'glucose':
+                            // Yellow gradient
+                            const glucoseIntensity = Math.min(value / 50, 1);
+                            color = `rgba(255, 220, 100, ${glucoseIntensity})`;
+                            break;
+                        case 'co2':
+                            // Red gradient
+                            const co2Intensity = Math.min(value / 100, 1);
+                            color = `rgba(255, 100, 100, ${co2Intensity})`;
+                            break;
+                        case 'temperature':
+                            // Temperature gradient (blue = cold -10°C, red = hot 50°C)
+                            const temp = (value - (-10)) / 60; // -10 to 50°C range = 60 degrees
+                            const r = Math.floor(255 * temp);
+                            const b = Math.floor(255 * (1 - temp));
+                            color = `rgba(${r}, 100, ${b}, 0.6)`;
+                            break;
+                    }
+                    
+                    // Convert world coordinates to screen coordinates
+                    const worldX = x * GRID_RESOLUTION;
+                    const worldY = y * GRID_RESOLUTION;
+                    
+                    const screenX = (worldX - bounds.min.x) * scaleX;
+                    const screenY = (worldY - bounds.min.y) * scaleY;
+                    const screenWidth = GRID_RESOLUTION * scaleX;
+                    const screenHeight = GRID_RESOLUTION * scaleY;
+                    
+                    gridCtx.fillStyle = color;
+                    gridCtx.fillRect(screenX, screenY, screenWidth, screenHeight);
+                }
+            }
+        }
+        
+        function killCell(cell, index, reason = 'age') {
+            cell.alive = false;
+            
+            // Track death reason
+            if (reason === 'age') stats.deaths.age++;
+            else if (reason === 'temperature') stats.deaths.temperature++;
+            else if (reason === 'starvation') stats.deaths.starvation++;
+            else if (reason === 'poison') stats.deaths.poison++;
+            
+            // Remove all connections
+            const connectedCells = [...cell.connections];
+            connectedCells.forEach(otherCell => {
+                disconnectCells(cell, otherCell);
+            });
+            
+            // Leave substances behind
+            const gridPos = getGridPosition(cell.body.position);
+            if (gridPos) {
+                substanceGrid[gridPos.x][gridPos.y].nitrogen += 5;
+                substanceGrid[gridPos.x][gridPos.y].glucose += 2;
+            }
+            
+            World.remove(world, cell.body);
+            cells.splice(index, 1);
+        }
+        
+        function divideCell(cell) {
+            cell.lastDivision = Date.now();
+            
+            // Create offspring adjacent to parent
+            createCell(cell, false);
+        }
+        
+        function getGridPosition(position) {
+            const x = Math.floor(position.x / GRID_RESOLUTION);
+            const y = Math.floor(position.y / GRID_RESOLUTION);
+            
+            if (x < 0 || y < 0 || x >= substanceGrid.length || y >= substanceGrid[0].length) {
+                return null;
+            }
+            
+            return { x, y };
+        }
+        
+        function updateMetabolism(cell) {
+            const gridPos = getGridPosition(cell.body.position);
+            if (!gridPos) return;
+            
+            const grid = substanceGrid[gridPos.x][gridPos.y];
+            const dt = 0.1 * timeScale; // Apply time scale to metabolism rate
+            
+            // Check if enough resources to consume
+            const oxygenNeeded = cell.config.metabolism.oxygen * dt;
+            const glucoseNeeded = cell.config.metabolism.glucose * dt;
+            
+            if (grid.oxygen < oxygenNeeded || grid.glucose < glucoseNeeded) {
+                // Starvation - chance to die
+                if (Math.random() < 0.05) { // 5% chance per tick when starving
+                    return 'starve'; // Signal to kill this cell
+                }
+                return 'ok';
+            }
+            
+            // Consume
+            grid.oxygen -= oxygenNeeded;
+            grid.glucose -= glucoseNeeded;
+            
+            // Produce
+            grid.co2 += cell.config.metabolism.co2 * dt;
+            grid.nitrogen += cell.config.metabolism.nitrogen * dt;
+            
+            // Check CO2 toxicity
+            if (grid.co2 > 80) {
+                if (Math.random() < 0.02) { // 2% chance per tick
+                    return 'poison';
+                }
+            }
+            
+            // Clamp values
+            grid.oxygen = Math.max(0, grid.oxygen);
+            grid.glucose = Math.max(0, grid.glucose);
+            
+            return 'ok';
+        }
+        
+        function diffuseSubstances() {
+            // Simple diffusion - average with neighbors
+            const newGrid = JSON.parse(JSON.stringify(substanceGrid));
+            const diffusionRate = 0.1;
+            
+            for (let x = 1; x < substanceGrid.length - 1; x++) {
+                for (let y = 1; y < substanceGrid[0].length - 1; y++) {
+                    ['oxygen', 'glucose', 'co2', 'nitrogen'].forEach(substance => {
+                        const avg = (
+                            substanceGrid[x-1][y][substance] +
+                            substanceGrid[x+1][y][substance] +
+                            substanceGrid[x][y-1][substance] +
+                            substanceGrid[x][y+1][substance]
+                        ) / 4;
+                        
+                        newGrid[x][y][substance] = substanceGrid[x][y][substance] * (1 - diffusionRate) + avg * diffusionRate;
+                    });
+                }
+            }
+            
+            substanceGrid = newGrid;
+        }
+        
+        function checkCellConnections() {
+            // Check all pairs of cells for potential connections
+            for (let i = 0; i < cells.length; i++) {
+                for (let j = i + 1; j < cells.length; j++) {
+                    const cellA = cells[i];
+                    const cellB = cells[j];
+                    
+                    // Skip if already connected
+                    if (cellA.connections.includes(cellB)) continue;
+                    
+                    // Check if they're touching
+                    const dx = cellA.body.position.x - cellB.body.position.x;
+                    const dy = cellA.body.position.y - cellB.body.position.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // If close enough and both have sufficient adhesion
+                    const avgAdhesion = (cellA.config.adhesion + cellB.config.adhesion) / 2;
+                    if (distance < CELL_SIZE * 1.2 && avgAdhesion > ADHESION_THRESHOLD) {
+                        // Create connection
+                        connectCells(cellA, cellB, avgAdhesion);
+                    }
+                }
+            }
+        }
+        
+        function connectCells(cellA, cellB, adhesionStrength) {
+            // Create constraint (spring) between cells
+            const stiffness = adhesionStrength / 200; // Reduced from /100 - softer springs
+            
+            const constraint = Constraint.create({
+                bodyA: cellA.body,
+                bodyB: cellB.body,
+                stiffness: stiffness * 0.3,  // Reduced from 0.5
+                damping: 0.5,                 // Increased from 0.1 - more damping!
+                length: CELL_SIZE * 0.9,     // Slightly more space
+                render: {
+                    visible: false  // Hide constraint visualization
+                }
+            });
+            
+            World.add(world, constraint);
+            constraints.push(constraint);
+            
+            // Track connection
+            cellA.connections.push(cellB);
+            cellB.connections.push(cellA);
+        }
+        
+        function disconnectCells(cellA, cellB) {
+            // Find and remove constraint
+            for (let i = constraints.length - 1; i >= 0; i--) {
+                const c = constraints[i];
+                if ((c.bodyA === cellA.body && c.bodyB === cellB.body) ||
+                    (c.bodyA === cellB.body && c.bodyB === cellA.body)) {
+                    World.remove(world, c);
+                    constraints.splice(i, 1);
+                    break;
+                }
+            }
+            
+            // Remove from connections
+            cellA.connections = cellA.connections.filter(c => c !== cellB);
+            cellB.connections = cellB.connections.filter(c => c !== cellA);
+        }
+        
+        function updateColonies() {
+            // Clear old colonies
+            colonies = [];
+            cells.forEach(c => c.colony = null);
+            
+            // Build colonies using connected components algorithm
+            const visited = new Set();
+            
+            cells.forEach(cell => {
+                if (visited.has(cell)) return;
+                
+                // Start new colony
+                const colony = [];
+                const queue = [cell];
+                
+                while (queue.length > 0) {
+                    const current = queue.shift();
+                    if (visited.has(current)) continue;
+                    
+                    visited.add(current);
+                    colony.push(current);
+                    current.colony = colonies.length;
+                    
+                    // Add connected neighbors
+                    current.connections.forEach(neighbor => {
+                        if (!visited.has(neighbor)) {
+                            queue.push(neighbor);
+                        }
+                    });
+                }
+                
+                if (colony.length > 1) {
+                    colonies.push(colony);
+                }
+            });
+            
+            stats.colonyCount = colonies.length;
+        }
+        
+        function updateStats() {
+            stats.cellCount = cells.length;
+            
+            // Calculate averages
+            let avgAdhesion = 0;
+            let avgColonySize = 0;
+            
+            if (cells.length > 0) {
+                cells.forEach(cell => {
+                    avgAdhesion += cell.config.adhesion;
+                });
+                avgAdhesion /= cells.length;
+            }
+            
+            if (colonies.length > 0) {
+                colonies.forEach(colony => {
+                    avgColonySize += colony.length;
+                });
+                avgColonySize /= colonies.length;
+            }
+            
+            // Record history
+            const now = Date.now();
+            if (isRunning) {
+                statsHistory.push({
+                    time: now - startTime,
+                    cellCount: stats.cellCount,
+                    colonyCount: stats.colonyCount,
+                    avgAdhesion: avgAdhesion,
+                    avgColonySize: avgColonySize
+                });
+                
+                // Limit history length
+                if (statsHistory.length > maxHistoryLength) {
+                    statsHistory.shift();
+                }
+            }
+            
+            // Update display
+            const elapsed = isRunning ? now - startTime : 0;
+            const minutes = Math.floor(elapsed / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            
+            document.getElementById('timeDisplay').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            document.getElementById('cellCount').textContent = stats.cellCount;
+            
+            // Calculate and display zoom level
+            const worldWidth = render.bounds.max.x - render.bounds.min.x;
+            const zoomLevel = (WORLD_SIZE / worldWidth).toFixed(2);
+            document.getElementById('zoomLevel').textContent = `${zoomLevel}x`;
+            
+            document.getElementById('colonyCount').textContent = stats.colonyCount;
+            document.getElementById('generation').textContent = stats.generation;
+            document.getElementById('mutations').textContent = stats.mutations;
+            document.getElementById('avgAdhesion').textContent = avgAdhesion.toFixed(1);
+            document.getElementById('avgColonySize').textContent = avgColonySize.toFixed(1);
+            
+            // Death and birth statistics
+            const totalDeaths = stats.deaths.age + stats.deaths.temperature + stats.deaths.starvation + stats.deaths.poison;
+            document.getElementById('birthCount').textContent = stats.births;
+            document.getElementById('totalDeaths').textContent = totalDeaths;
+            document.getElementById('deathAge').textContent = stats.deaths.age;
+            document.getElementById('deathTemp').textContent = stats.deaths.temperature;
+            document.getElementById('deathStarve').textContent = stats.deaths.starvation;
+            document.getElementById('deathPoison').textContent = stats.deaths.poison;
+        }
+        
+        // Initialize on load
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
